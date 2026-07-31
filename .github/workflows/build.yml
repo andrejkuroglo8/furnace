@@ -362,7 +362,7 @@ jobs:
 
 
     - name: Upload artifact
-      if: ${{ github.repository == 'Eknous-P/furnace' && github.ref_name == 'android-actions' }}
+      if: ${{ github.repository == 'andrejkuroglo8/furnace' && github.ref_name == 'android-actions' }}
       uses: actions/upload-artifact@v4.3.0
       with:
         name: ${{ steps.package-identify.outputs.id }}
