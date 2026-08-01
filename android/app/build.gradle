@@ -11,17 +11,16 @@ android {
     if (buildAsApplication) {
         namespace "org.tildearrow.furnace"
     }
-    compileSdkVersion 26
+    compileSdkVersion 36
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 26
-        versionCode 228
-        versionName "0.6.8.1"
+        targetSdkVersion 36
+        versionCode 250
+        versionName "0.6.8.3"
         externalNativeBuild {
             cmake {
-                arguments "-DANDROID_APP_PLATFORM=android-21", "-DANDROID_STL=c++_static", "-DWARNINGS_ARE_ERRORS=ON", "-DWITH_LOCALE=ON", "-DUSE_MOMO=ON"
-                // abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-                abiFilters 'arm64-v8a'
+                arguments "-DANDROID_APP_PLATFORM=android-36", "-DANDROID_STL=c++_static", "-DWARNINGS_ARE_ERRORS=ON", "-DWITH_LOCALE=ON", "-DUSE_MOMO=ON"
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             }
         }
     }
