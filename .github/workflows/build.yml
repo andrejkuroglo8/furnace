@@ -34,7 +34,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4.1.1
+      uses: actions/checkout@v7.0.0
       with:
         submodules: recursive
 
@@ -163,7 +163,7 @@ jobs:
 
     - name: Configure
       run: |
-        export USE_WAE=ON
+        export USE_WAE=OFF
         export CMAKE_EXTRA_ARGS=()
         if [ '${{ matrix.config.compiler }}' == 'msvc' ]; then
           CMAKE_EXTRA_ARGS+=('-DCMAKE_GENERATOR_PLATFORM=${{ steps.windows-identify.outputs.msvc-target }}')
@@ -363,14 +363,14 @@ jobs:
 
     - name: Upload artifact
       if: ${{ github.repository == 'andrejkuroglo8/furnace' && github.ref_name == 'android-actions' }}
-      uses: actions/upload-artifact@v4.3.0
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ steps.package-identify.outputs.id }}
         path: ${{ steps.package-identify.outputs.filename }}
 
     - name: Upload 30xx artifact
       if: ${{ github.repository == 'tildearrow/furnace' && github.ref_name == 'theUltimateFix' }}
-      uses: actions/upload-artifact@v4.3.0
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ steps.package-identify.outputs.id }}
         path: ${{ steps.package-identify.outputs.filename }}
