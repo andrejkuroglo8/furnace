@@ -335,6 +335,9 @@ jobs:
         cp ../../LICENSE.GPLv2 .
         cp ../../res/releaseReadme/unstable-other.txt .
         cp -r ../../papers papers
+        cp -r ../../demos demos
+        cp -r ../../instruments instruments
+        cp -r ../../wavetables wavetables
         rmdir usr
 
         popd
@@ -354,6 +357,9 @@ jobs:
         cp ../../LICENSE .
         cp ../../res/releaseReadme/unstable-android.txt .
         cp -r ../../papers papers
+        cp -r ../../demos demos
+        cp -r ../../instruments instruments
+        cp -r ../../wavetables wavetables
 
         popd
 
