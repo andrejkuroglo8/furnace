@@ -261,6 +261,10 @@ void FurnaceGUI::drawPattern() {
     // ???
     size.x+=oneChar.x;
 
+    if (debugRowTimestamps) {
+      size.x+=oneChar.x*12.0f;
+    }
+
     ImVec2 top=ImGui::GetCursorScreenPos();
     ImVec2 topRows=top+ImVec2(ImGui::GetScrollX(),0);
     ImVec2 topHeaders=top+ImVec2(0,ImGui::GetScrollY());
@@ -1013,6 +1017,8 @@ void FurnaceGUI::drawPattern() {
       }
     }
 
+    bool isCursorVisible=false;
+
     /*String debugCrap=fmt::sprintf("RANGE: %d-%d",rowsBegin,rowsEnd);
     dl->AddText(ImVec2(topRows.x,topHeaders.y),0xffffffff,debugCrap.c_str());*/
 
@@ -1260,6 +1266,8 @@ void FurnaceGUI::drawPattern() {
                     );
                   }
                 }
+                // the cursor is visible - don't display cursor position indicator
+                isCursorVisible=true;
               }
             }
           }
@@ -1505,6 +1513,26 @@ void FurnaceGUI::drawPattern() {
       );
 
       ImGui::GetStyle().Alpha=origAlpha;
+
+      // row timestamps (debug)
+      if (debugRowTimestamps) {
+        pos=ImVec2(top.x+patChanX[chans],top.y+patLineHeight*rowsBegin);
+
+        int ord=firstOrd;
+        int row=firstRow;
+
+        for (int j=rowsBegin; j<rowsEnd; j++) {
+          TimeMicros rowTS=e->curSubSong->ts.getTimes(ord,row);
+          String rowTSStr=(rowTS.seconds==-1)?"---":rowTS.toString(2,TA_TIME_FORMAT_AUTO_MS_ZERO);
+          dl->AddText(pos,0xffffffff,rowTSStr.c_str());
+          // go to next row
+          if (++row>=e->curSubSong->patLen) {
+            row=0;
+            ord++;
+          }
+          pos.y+=patLineHeight;
+        }
+      }
 
       // test for selection
       if (hovered) {
@@ -1876,6 +1904,23 @@ void FurnaceGUI::drawPattern() {
       snprintf(id,63,"%.2X",e->getExtValue());
       dl->AddText(pos+ImGui::GetStyle().FramePadding,ImGui::GetColorU32(uiColors[GUI_COLOR_EE_VALUE]),id);
     }
+
+    // display an indicator if the cursor is off-screen
+    // TODO: when hiding a channel, the cursor may become invisible and these indicators effectively become misleading.
+    //       think of a solution.
+    // TODO: add indicators for horizontal position as well
+    if (!isCursorVisible) {
+      // check whether the cursor is above or below
+      if ((cursor.order==firstOrd && cursor.y<firstRow) || cursor.order<firstOrd) {
+        pos.x=winRect.Max.x-ImGui::CalcTextSize(ICON_FA_I_CURSOR ICON_FA_ARROW_UP).x-ImGui::GetStyle().FramePadding.x-ImGui::GetStyle().ScrollbarSize-ImGui::GetStyle().ScrollbarPadding;
+        pos.y=topHeaders.y+sizeHeaders.y+ImGui::GetStyle().FramePadding.y;
+        dl->AddText(pos,ImGui::GetColorU32(uiColors[GUI_COLOR_PATTERN_CURSOR_POS_INDICATOR]),ICON_FA_I_CURSOR ICON_FA_ARROW_UP);
+      } else {
+        pos.x=winRect.Max.x-ImGui::CalcTextSize(ICON_FA_I_CURSOR ICON_FA_ARROW_DOWN).x-ImGui::GetStyle().FramePadding.x-ImGui::GetStyle().ScrollbarSize-ImGui::GetStyle().ScrollbarPadding;
+        pos.y=prevClipRect.Max.y-ImGui::GetFrameHeight()-ImGui::GetStyle().FramePadding.y;
+        dl->AddText(pos,ImGui::GetColorU32(uiColors[GUI_COLOR_PATTERN_CURSOR_POS_INDICATOR]),ICON_FA_I_CURSOR ICON_FA_ARROW_DOWN);
+      }
+    } 
 
     // let's draw a warning if the instrument cannot be previewed
     if (failedNoteOn) {
