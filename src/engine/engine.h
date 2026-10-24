@@ -63,10 +63,10 @@ class DivWorkPool;
 // we're not reaching 1.0 until we have export for all major systems.
 //
 // development/interim versions go by the format version, prepended with "dev".
-#define DIV_VERSION "dev255"
+#define DIV_VERSION "dev256"
 // format version.
 // this shall be bumped on each file format/breaking change.
-#define DIV_ENGINE_VERSION 255
+#define DIV_ENGINE_VERSION 256
 // for imports
 #define DIV_VERSION_MOD 0xff01
 #define DIV_VERSION_FC 0xff02
@@ -750,32 +750,73 @@ class DivEngine {
   // elapsedBeatS: same but for highlight 1.
   // curSpeed: the current speed index.
   int subticks, ticks, curRow, curOrder, prevRow, prevOrder, remainingLoops, totalLoops, lastLoopPos, exportLoopCount, curExportChan, nextSpeed, prevSpeed, elapsedBars, elapsedBeats, curSpeed;
+  // the current sub-song index.
   size_t curSubSongIndex;
+  // position in current audio frame. used in the audio output callback.
   size_t bufferPos;
+  // the tick rate.
   double divider;
+  // number of samples before next tick (in engine output rate).
   int cycles;
+  // fractional part of the above.
   double clockDrift;
+  // number of samples before next MIDI beat clock.
   int midiClockCycles;
   double midiClockDrift;
+  // number of samples before next MIDI timecode part.
   int midiTimeCycles;
   double midiTimeDrift;
+  // current step play state.
+  // - 0: step play is disabled
+  // - 1: step play enabled - waiting for next step
+  // - 2: step play enabled - next step pending
   int stepPlay;
+  // changeOrd: jump to this order after the current row (if not -1).
+  // - -2 means "next order".
+  // changePos: jump to this row after the current row. changeOrd must be set.
+  // totalTicksR: elapsed ticks during playback 
+  // curMidiClock: the current MIDI beat clock.
+  // curMidiTime: the current MIDI timecode (in frames).
+  // totalCmds: how many commands we dispatched so far 
+  // lastCmds: the previous value of totalCmds, for...
+  // cmdsPerSecond: the command rate, in commands per second.
   int changeOrd, changePos, totalTicksR, curMidiClock, curMidiTime, totalCmds, lastCmds, cmdsPerSecond;
+  // current playback time.
   TimeMicros totalTime;
+  // fraction of microseconds in playback time.
   double totalTimeDrift;
+  // curMidiTimePiece: which byte of MIDI timecode to produce.
+  // curMidiTimeCode: current MIDI time code byte.
   int curMidiTimePiece, curMidiTimeCode;
+  // extValue: last value of EExx effect.
+  // pendingMetroTick: whether the metronome must click. one of the following:
+  // - 0: nothing
+  // - 1: beat
+  // - 2: bar
   unsigned char extValue, pendingMetroTick;
+  // the current groove pattern/speed set.
   DivGroovePattern speeds;
+  // current virtual tempo numerator/denominator.
   short virtualTempoN, virtualTempoD;
+  // virtual tempo accumulator.
+  // on each tick, the numerator is added.
+  // while it exceeds or meets the denominator, the tick counter is decreased.
   short tempoAccum;
+  // current console status view mode.
   DivStatusView view;
+  // when to halt (pause playback).
   DivHaltPositions haltOn;
+  // playback state for each channel.
   DivChannelState chan[DIV_MAX_CHANS];
+  // the current audio backend.
   DivAudioEngines audioEngine;
+  // audio export options currently in use.
   DivAudioExportModes exportMode;
   DivAudioExportFormats exportFormat;
   DivAudioExportWavFormats wavFormat;
   DivAudioExportBitrateModes exportBitRateMode;
+  // stores the engine's previous output rate.
+  // restored after audio export.
   double prevAudioRate;
   double exportFadeOut;
   bool isFadingOut;
@@ -783,27 +824,56 @@ class DivEngine {
   int exportBitRate;
   float exportVBRQuality;
   bool exportChannelMask[DIV_MAX_CHANS];
+  // the current Furnace config is loaded here.
+  // use the getConf*() functions to access it, or getConfObject() if you really need the entire config.
   DivConfig conf;
+  // note event queue
   FixedQueue<DivNoteEvent,8192> pendingNotes;
-  // bitfield
+  // a bitfield which keeps track of the rows we've "walked" on.
+  // used to determine loop point.
+  // 256 orders × 256 rows = 65536 bits = 8192 bytes
   unsigned char walked[8192];
+  // stores which chsnnels are muted.
   bool isMuted[DIV_MAX_CHANS];
+  // isBusy: general busy lock, used by the audio engine.
+  // saveLock: save lock, used to prevent concurrent saves (e.g. backup thread).
+  // playPosLock: taken when the playback position is changing.
   std::mutex isBusy, saveLock, playPosLock;
+  // path to config directory. usually one of the following:
+  // - Windows: %USERPROFILE%\AppData\Roaming\furnace
+  // - macOS: ~/Library/Application Support/Furnace
+  // - Linux/other: ~/.config/furnace
   String configPath;
+  // parh to config file.
   String configFile;
+  // information about last error.
   String lastError;
+  // displays information to the user after an operation (e.g. exporting or loading a file).
+  // use the addWarning() macro to append warnings!
   String warnings;
+  // list of available audio devices.
+  // call rescanAudioDeices() to populate it again.
   std::vector<String> audioDevs;
+  // list of MIDI input/output devices.
+  // call rescanMidiDevices() to populate it again.
   std::vector<String> midiIns;
   std::vector<String> midiOuts;
+  // a dump of all dispatched commands.
+  // set cmdStreamEnabled to enable command dumping.
   std::vector<DivCommand> cmdStream;
+  // audio effects. not implemented yet.
   std::vector<DivEffectContainer> effectInst;
+  // the initial system's channel mask.
   std::vector<int> curChanMask;
+  // system definitions.
+  // registered in registerSystems(), called by preInit().
   static DivSysDef* sysDefs[DIV_SYSTEM_MAX+1];
+  // registered in registerROMExports(), called by preInit().
   static DivROMExportDef* romExportDefs[DIV_ROM_MAX];
-
+  // the current command stream player. NULL if not loaded.
   DivCSPlayer* cmdStreamInt;
 
+  // sample preview state.
   struct SamplePreview {
     double rate;
     int sample;
@@ -824,22 +894,33 @@ class DivEngine {
       dir(false) {}
   } sPreview;
 
+  // a sine table with range ±127.
   short vibTable[64];
+  // a cosine table with range 0-255. I believe.
   short tremTable[128];
+  // for audio effects. currently unused.
   short effectSlotMap[4096];
+  // MIDI base channel. used during note preview when a channel is not specified.
   int midiBaseChan;
+  // polyphonic MIDI note preview.
   bool midiPoly;
+  // debug MIDI messages.
   bool midiDebug;
+  // used to keep track of the oldest active channel.
   size_t midiAgeCounter;
 
+  // sample preview state.
   blip_buffer_t* samp_bb;
   size_t samp_bbInLen;
   int samp_temp, samp_prevSample;
   short* samp_bbIn;
   short* samp_bbOut;
 
+  // an array which stores where do metronome ticks occur within an audio output frame.
   unsigned char* metroTick;
+  // size of the metroTick array.
   size_t metroTickLen;
+  // metronome output buffer.
   float* metroBuf;
   size_t metroBufLen;
   float metroFreq, metroPos;
@@ -847,52 +928,178 @@ class DivEngine {
   float metroVol;
   float previewVol;
 
+  // file player output buffer.
   float* filePlayerBuf[DIV_MAX_OUTPUTS];
   size_t filePlayerBufLen;
+  // an audio file player instance.
   DivFilePlayer* curFilePlayer;
+  // whether the file player should be synchronized to tracker playback.
   bool filePlayerSync;
+  // file player cue (start) point.
   TimeMicros filePlayerCue;
+  // unused...
   int filePlayerLoopTrail;
   int curFilePlayerTrail;
 
+  // number of samples actually present in the audio output frame.
   size_t totalProcessed;
 
+  // how many threads to use in the render pool.
   unsigned int renderPoolThreads;
+  // the render pool runs one thread per dispatch during audio output.
   DivWorkPool* renderPool;
 
   // MIDI stuff
+  // this function provides a mechanism to filter MIDI input messages before they are added to the note preview queue.
+  // the function should return an instrument index, which will be used
+  // for all forthcoming notes.
+  // special values:
+  // - -1: don't change
+  // - -2: "preview" instrument
+  // - -3: cancel event (do not add to pending notes)
   std::function<int(const TAMidiMessage&)> midiCallback=[](const TAMidiMessage&) -> int {return -3;};
 
+  /**
+   * INTERNAL ENGINE FUNCTIONS
+   *
+   * most of these should not be called directly.
+   */
+
+  /**
+   * called by nextRow() before calling processRow().
+   * executes chip pre-effects.
+   * @param i the channel to process.
+   */
   void processRowPre(int i);
+  /**
+   * called by nextRow() and nextTick() (after EDxx).
+   * processes a channel's cell. notes, instruments, volumes and effects.
+   * @param i the channel to process.
+   * @param afterDelay must be set to true if this is being called from nextTick(). this function will bail out early if there is an EDxx effect.
+   */
   void processRow(int i, bool afterDelay);
+  /**
+   * jump to the next order, or to an scheduled order (see 0Bxx and 0Dxx effects).
+   * called by nextRow().
+   */
   void nextOrder();
+  /**
+   * process the next row.
+   * called by nextTick().
+   */
   void nextRow();
-  void performVGMWrite(SafeWriter* w, DivSystem sys, DivRegWrite& write, int streamOff, double* loopTimer, double* loopFreq, int* loopSample, bool* sampleDir, bool isSecond, int* pendingFreq, int* playingSample, int* setPos, unsigned int* sampleOff8, unsigned int* sampleLen8, size_t bankOffset, bool directStream, bool* sampleStoppable, bool dpcm07, DivDispatch** writeNES, int rateCorrection);
-  // returns true if end of song.
+  /**
+   * process the next tick.
+   * @param noAccum set during playSub() and "reset" loop modality, ensuring the seek process does not alter the song playback time.
+   * @param inhibitLowLat when set, low-latency mode is disregarded. you must set this to true if calling outside nextBuf() (e.g. ROM export).
+   * @return whether we reached end of song.
+   */
   bool nextTick(bool noAccum=false, bool inhibitLowLat=false);
+
+  /**
+   * process per-chip effects.
+   * finds an effect, and attempts to execute it.
+   * @param ch channel.
+   * @param effect effect.
+   * @param effectVal effect value.
+   * @return whether a chip effect was found and successfully executed. if not, proceed with normal effects.
+   */
   bool perSystemEffect(int ch, unsigned char effect, unsigned char effectVal);
+  /**
+   * process per-chip post-effects.
+   * this happens after notes in processRow().
+   * @param ch channel.
+   * @param effect effect.
+   * @param effectVal effect value.
+   * @return whether a chip effect was found and successfully executed.
+   */
   bool perSystemPostEffect(int ch, unsigned char effect, unsigned char effectVal);
+  /**
+   * process per-chip pre-effects.
+   * this is called by processRowPre().
+   * @param ch channel.
+   * @param effect effect.
+   * @param effectVal effect value.
+   * @return whether a chip effect was found and successfully executed.
+   */
   bool perSystemPreEffect(int ch, unsigned char effect, unsigned char effectVal);
+  /**
+   * reset dispatches, song speeds and channel state.
+   * this does not stop playback!
+   */
   void reset();
+  /**
+   * this function handles seeking to the current order/row.
+   * called during play(), and after end of song in the "reset" loop modality.
+   * @param preserveDrift preserves all timings. set to true when handling "reset" loop modality.
+   * @param goalRow specify a row to seek to.
+   */
   void playSub(bool preserveDrift, int goalRow=0);
+  /**
+   * runs MIDI beat clock.
+   * @param totalCycles how many output samples to run for.
+   */
   void runMidiClock(int totalCycles=1);
+  /**
+   * runs MIDI timecode.
+   * @param totalCycles how many output samples to run for.
+   */
   void runMidiTime(int totalCycles=1);
+  /**
+   * currently returns true.
+   * @return true.
+   */
   bool shallSwitchCores();
 
+  /**
+   * this function is a mess.
+   * it takes a zillion arguments and writes VGM writes to a SafeWriter.
+   *
+   * @param SafeWriter pointer to the target SafeWriter.
+   * @param sys the chip type.
+   * @param write the register write.
+   * @param streamOff what?
+   */
+  void performVGMWrite(SafeWriter* w, DivSystem sys, DivRegWrite& write, int streamOff, double* loopTimer, double* loopFreq, int* loopSample, bool* sampleDir, bool isSecond, int* pendingFreq, int* playingSample, int* setPos, unsigned int* sampleOff8, unsigned int* sampleLen8, size_t bankOffset, bool directStream, bool* sampleStoppable, bool dpcm07, DivDispatch** writeNES, int rateCorrection);
+
+  /**
+   * hello, world!
+   */
   void testFunction();
 
+  /**
+   * these functions are called by load().
+   * these load different file formats.
+   * @param file a pointer to file data.
+   * @param len the file size.
+   * @return whether loading was successful. if so, the current DivSong is replaced, playback is stopped and dispatches are initialized.
+   */
   bool loadDMF(unsigned char* file, size_t len);
+  /**
+   * @param variantID Furnace variant ID (to accommodate certain Furnace forks).
+   */
   bool loadFur(unsigned char* file, size_t len, int variantID=0);
   bool loadMod(unsigned char* file, size_t len);
   bool loadS3M(unsigned char* file, size_t len);
   bool loadXM(unsigned char* file, size_t len);
   bool loadIT(unsigned char* file, size_t len);
+  /**
+   * @param dnft set if this is a Dn-FamiTracker module.
+   * @param dnftSig set if the module has a Dn-FamiTracker magic/signature.
+   * @param eft set if this is an E-FamiTracker module.
+   */
   bool loadFTM(unsigned char* file, size_t len, bool dnft, bool dnftSig, bool eft);
   bool loadFC(unsigned char* file, size_t len);
   bool loadTFMv1(unsigned char* file, size_t len);
   bool loadTFMv2(unsigned char* file, size_t len);
   bool loadMIDI(unsigned char* file, size_t len);
 
+  /**
+   * these functions load various instrument formats.
+   * @param reader a SafeReader to the instrument.
+   * @param ret where to place loaded instrument(s).
+   * @param stripPath the file name (stripped from the path). this is used to set the instrument name if not store in the instrument.
+   */
   void loadDMP(SafeReader& reader, std::vector<DivInstrument*>& ret, String& stripPath);
   void loadTFI(SafeReader& reader, std::vector<DivInstrument*>& ret, String& stripPath);
   void loadVGI(SafeReader& reader, std::vector<DivInstrument*>& ret, String& stripPath);
@@ -908,8 +1115,13 @@ class DivEngine {
   void loadFF(SafeReader& reader, std::vector<DivInstrument*>& ret, String& stripPath);
   void loadWOPL(SafeReader& reader, std::vector<DivInstrument*>& ret, String& stripPath);
   void loadWOPN(SafeReader& reader, std::vector<DivInstrument*>& ret, String& stripPath);
- 
- //sample banks
+
+  /**
+   * these functions load sample banks.
+   * @param reader a SafeReader to the sample bank.
+   * @param ret where to place loaded samples.
+   * @param stripPath the file name (stripped from the path). this is used as sample names.
+   */
   void loadP(SafeReader& reader, std::vector<DivSample*>& ret, String& stripPath);
   void loadPPC(SafeReader& reader, std::vector<DivSample*>& ret, String& stripPath);
   void loadPPS(SafeReader& reader, std::vector<DivSample*>& ret, String& stripPath);
@@ -918,39 +1130,125 @@ class DivEngine {
   void loadPZI(SafeReader& reader, std::vector<DivSample*>& ret, String& stripPath);
   void loadP86(SafeReader& reader, std::vector<DivSample*>& ret, String& stripPath);
 
-
-
+  /**
+   * load a sample ROM. currently unused.
+   * @param path path to data.
+   * @param expectedSize the ROM's size.
+   * @param ret ROM will be allocated and this pointer will be set.
+   * @return 0 on success or -1 otherwise.
+   */
   int loadSampleROM(String path, ssize_t expectedSize, unsigned char*& ret);
 
+  /**
+   * initialize the currently selected audio backend.
+   * @return whether initialization was successful.
+   */
   bool initAudioBackend();
+  /**
+   * de-initialize the audio backend and clear the audio backend selection.
+   * @param dueToSwitchMaster if set, don't reset the audio backend. called on switchMaster().
+   * @return whether it was successful.
+   */
   bool deinitAudioBackend(bool dueToSwitchMaster=false);
 
+  /**
+   * registers all chip definitions.
+   * see sysDef.cpp for these.
+   */
   void registerSystems();
+  /**
+   * registers all ROM export definitions.
+   * see exportDef.cpp for these.
+   */
   void registerROMExports();
+  /**
+   * initialize the current song with a specified system preset.
+   * it is best you use createNew() if you intend to create a new song.
+   * @param description the system preset.
+   * @param inBase64 whether description is a Base64-encoded string.
+   * @param oldVol compatibility option that uses old volume/panning range, back when it wasn't a floating point number.
+   */
   void initSongWithDesc(const char* description, bool inBase64=true, bool oldVol=false);
 
+  /**
+   * swap the index of two instruments in all patterns..
+   * called after moving an instrument.
+   * @param one the first instrument.
+   * @param two the second instrument.
+   */
   void exchangeIns(int one, int two);
+  /**
+   * TODO: this.
+   * @param one the first wavetable.
+   * @param two the second wavetable.
+   */
   void exchangeWave(int one, int two);
+  /**
+   * swap the index of two samples in all instruments.
+   * called after moving a sample.
+   * @param one the first sample.
+   * @param two the second sample.
+   */
   void exchangeSample(int one, int two);
 
+  /**
+   * copy a channel's contents to another.
+   * @param src the source channel.
+   * @param dest the destination channel.
+   */
   void copyChannel(int src, int dest);
+  /**
+   * swap the contents of two channels.
+   * @param src the first channel.
+   * @param dest the second channel.
+   */
   void swapChannels(int src, int dest);
+  /**
+   * destroy the contents of a channel.
+   * @param ch the channel to wipe.
+   */
   void stompChannel(int ch);
+  /**
+   * handle a change in chip channel count (e.g. by adding/changing/removing chips).
+   * @param firstChan the first channel of the affected chip.
+   * @param before the previous channel count.
+   * @param after the new channel count.
+   * @return whether we could. usually this fails when the change would exceed the channel limit.
+   */
   bool sysChanCountChange(int firstChan, int before, int after);
 
-  // recalculate patchbay (UNSAFE)
+  /**
+   * recalculate patchbay.
+   * NOT THREAD-SAFE!
+   */
   void recalcPatchbay();
 
-  // change song (UNSAFE)
+  /**
+   * change the current sub-song. stops playback.
+   * NOT THREAD-SAFE!
+   * @param songIndex the sub-song index.
+   */
   void changeSong(size_t songIndex);
 
-  // convert legacy sample mode to normal
-  // returns whether conversion occurred
+  /**
+   * convert legacy sample mode to the normal one.
+   * @return true if legacy mode is detected and has been converted.
+   */
   bool convertLegacySampleMode();
 
+  /**
+   * swap two chips.
+   * @param src the first chip.
+   * @param dest the second chip.
+   * @param preserveOrder if this is true, pattern channel data is preserved as-is. otherwise, pattern channel data will be adjusted to match.
+   */
   void swapSystemUnsafe(int src, int dest, bool preserveOrder=true);
 
-  // add every export method here
+  /**
+   * ROM EXPORT FRIENDS
+   *
+   * if you need full engine access, make sure to add your ROM export class to this list.
+   */
   friend class DivROMExport;
   friend class DivExportAmigaValidation;
   friend class DivExportS98;
@@ -961,90 +1259,287 @@ class DivEngine {
   friend class DivExportGRUB;
 
   public:
+    // the loaded song. this is public for convenience.
+    // when replacing, there is a ritual you must follow:
+    // 1. quitDispatch() (only if the engine is initialized)
+    // 2. lock busy mutexes
+    // 3. song.unload()
+    // 4. replace the song
+    // 5. set hasLoadedSomething to true
+    // 6. changeSong(0)
+    // 7. release locks
+    // 8. if the engine is running, initDispatch(), renderSamples() and reset() (locking the busy mutex)
+    // I will add a function to simplify this procedure in the future...
     DivSong song;
+    // shortcut for curSubSong->orders.
     DivOrders* curOrders;
+    // shortcut for curSubSong->pat.
     DivChannelData* curPat;
+    // the current sub-song.
     DivSubSong* curSubSong;
+    // the temporary instrument slot (-2).
+    // this is used for instrument preview in the file picker.
     DivInstrument* tempIns;
+    // stores whether a note on event occurred on a channel.
+    // manually clear after reading.
     bool keyHit[DIV_MAX_CHANS];
+    // a ring buffer for the master oscilloscope.
+    // it has a nominal size of 32768 samples.
     float* oscBuf[DIV_MAX_OUTPUTS];
+    // the size of the last audio output frame.
     float oscSize;
+    // read and write needles for the oscilloscope buffer.
+    // the audio callback will alter oscWritePos.
+    // the user interface must use oscReadPos.
     int oscReadPos, oscWritePos;
+    // multiplier of the tick rate in low-latency mode.
+    // this will be set so that the resulting rate is near-1000Hz.
     int tickMult;
+    // last nextBuf() inputs, outputs and buffer size.
+    // used to detect audio output changes.
     int lastNBIns, lastNBOuts, lastNBSize;
+    // time spent computing the last audio output frame, in nanoseconds.
     std::atomic<size_t> processTime;
 
+    // peak meter for each chip.
+    // used by the GUI mixer.
     float chipPeak[DIV_MAX_CHIPS][DIV_MAX_OUTPUTS];
 
-    // ugh...
+    // MIDI import options.
+    // the GUI checks whether the loaded file is a MIDI file and prompts options before actually loading.
     DivMIDIImportOptions midiImportOptions;
 
+    /**
+     * this function should not be called directly. it is used by saveAudio().
+     */
     void runExportThread();
+
+    /**
+     * this function handles audio output.
+     * it performs song playback, runs dispatches, and fills in an audio output frame.
+     * @param in pointers to audio input buffers (one per in channel). currently unused.
+     * @param out pointers to audio output buffers (one per output channel).
+     * @param inChans number of input channels. currently unused.
+     * @param outChans number of output channels.
+     * @param size size of audio buffers, in samples.
+     * @param calledFromExport used to tell the export and audio threads apart. during audio export, this function will output silence on the audio thread.
+     */
     void nextBuf(float** in, float** out, int inChans, int outChans, unsigned int size, bool calledFromExport=false);
+
+    /**
+     * get an instrument (non-null).
+     * 
+     * you shall not modify instruments returned by this function! it may be the default instrument, which should never be altered.
+     * @param index the instrument index. special indexes are:
+     * - -1: default instrument
+     * - -2: temporary/preview instrument (if it exists)
+     * @param fallbackType type of the default instrument to return if the requested instrument index is invalid.
+     * @return a DivInstrument from the song's instruments, or a default instrument otherwise.
+     */
     DivInstrument* getIns(int index, DivInstrumentType fallbackType=DIV_INS_FM);
+    /**
+     * get a wavetable (non-null).
+     *
+     * the same warning applies to this function.
+     * @param index the wavetable index.
+     * @return a DivWavetable from the song's wavetables, or a default saw wave if the index is out of range.
+     */
     DivWavetable* getWave(int index);
+    /**
+     * get a sample (non-null).
+     *
+     * again, don't alter the returned sample.
+     * @param index the sample index.
+     * @return a DivSample from the song's samples, or an empty sample otherwise.
+     */
     DivSample* getSample(int index);
+    /**
+     * get the active dispatch for a chip.
+     * @param index the chip index.
+     * @return a DivDispatch, or NULL on failure.
+     */
     DivDispatch* getDispatch(int index);
-    // parse old system setup description
+    /**
+     * parse old system setup description.
+     * the system description used in old version of Furnace consisted of a series of integers in the following order:
+     * - chip ID
+     * - chip volume (from 0 to 64)
+     * - chip panning (from -128 to 127)
+     * - chip flags (a bitfield)
+     * - chip 2 ID
+     * - ...
+     * @param desc the system description.
+     * @return a current system description.
+     */
     String decodeSysDesc(String desc);
-    // start fresh
+    /**
+     * replace the current song with an empty one.
+     * @param description the system description, or NULL for the stock Genesis/Mega Drive preset.
+     * @param sysName the system name.
+     * @param inBase64 whether the description is a Base64-encoded string.
+     */
     void createNew(const char* description, String sysName, bool inBase64=true);
+    /**
+     * replace the current song with an empty one, set to the default system.
+     */
     void createNewFromDefaults();
-    // load a file.
+
+    /**
+     * load a file.
+     * @param f pointer to file data.
+     * @param length the file size.
+     * @param nameHint a hint to the file's name.
+     * @return whether the file was loaded successfully.
+     */
     bool load(unsigned char* f, size_t length, const char* nameHint=NULL);
 
-    // play a binary command stream.
+    /**
+     * play a binary command stream.
+     * @param f pointer to stream data.
+     * @param length the data size.
+     * @return whether the command stream loaded successfully.
+     */
     bool playStream(unsigned char* f, size_t length);
-    // get the playing stream.
+    /**
+     * get the current command stream player.
+     * @return a DivCSPlayer, or NULL if not loaded.
+     */
     DivCSPlayer* getStreamPlayer();
-    // destroy command stream player.
+    /**
+     * destroy command stream player.
+     * @return whether successful.
+     */
     bool killStream();
 
-    // get the audio file player.
+    /**
+     * get the audio file player.
+     * this will create one if it doesn't exist.
+     * @return the DivFilePlayer.
+     */
     DivFilePlayer* getFilePlayer();
-    // get whether the player is synchronized with song playback.
+    /**
+     * get whether the player is synchronized with song playback.
+     * @return state.
+     */
     bool getFilePlayerSync();
+    /**
+     * set whether the player will synchronize with song playback.
+     * @param doSync whether to.
+     */
     void setFilePlayerSync(bool doSync);
-    // get/set file player cue position.
+    /**
+     * get/set file player cue position.
+     * @return the cue position.
+     */
     TimeMicros getFilePlayerCue();
+    /**
+     * set the file player's cue position.
+     * @param cue the new cue position.
+     */
     void setFilePlayerCue(TimeMicros cue);
-    // UNSAFE - sync file player to current playback position.
+    /**
+     * sync file player to current playback position.
+     * NOT THREAD-SAFE!
+     */
     void syncFilePlayer();
 
-    // save as .dmf.
+    /**
+     * save as .dmf.
+     * @param version the target format version. supported values are:
+     * - 24: 0.12 to 1.0
+     * - 25: 1.1 to 1.1.2
+     * - 26: 1.1.3+
+     * version 27 is not supported as there aren't any significant features which merit adding support.
+     * @return a SafeWriter with module data, or NULL on error.
+     */
     SafeWriter* saveDMF(unsigned char version);
-    // save as .fur.
-    // if notPrimary is true then the song will not be altered
+    /**
+     * save the current song.
+     * @param notPrimary set when saving from the backup thread. this preserves the internally stored version and isDMF state.
+     * @return a SafeWriter with song data, or NULL on error.
+     */
     SafeWriter* saveFur(bool notPrimary=false);
-    // return a ROM exporter.
+
+    /**
+     * prepare and initialize ROM export.
+     * @param sys the ROM export type.
+     * @return a ROM exporter.
+     */
     DivROMExport* buildROM(DivROMExportOptions sys);
     // compile instruments.
     SafeWriter* compileAllIns(int insType);
-    // dump to VGM.
-    // set trailingTicks to:
-    // - 0 to add one tick of trailing
-    // - x to add x+1 ticks of trailing
-    // - -1 to auto-determine trailing
-    // - -2 to add a whole loop of trailing
+    /**
+     * export to VGM (register dump format).
+     * @param sysToExport an array specifying which chips to export. if NULL, all chips supported by the VGM format will be exported.
+     * @param loop whether to loop.
+     * @param version VGM format version ($XX.YY).
+     * @param patternHints write data blocks on each order change.
+     * @param directStream dump DAC writes directly instead of using data streams.
+     * @param trailingTicks set how many ticks to leave at the end before looping:
+     * - 0 to add one tick of trailing
+     * - x to add x+1 ticks of trailing
+     * - -1 to auto-determine trailing
+     * - -2 to add a whole loop of trailing
+     * @param dpcm07 select between RAM writes and NES DPCM ROM data for DPCM data. this setting exists due to varying support across VGM players.
+     * @param correctedRate use to compensate for timing errors in certain players.
+     * @return a SafeWriter, or NULL on error.
+     */
     SafeWriter* saveVGM(bool* sysToExport=NULL, bool loop=true, int version=0x171, bool patternHints=false, bool directStream=false, int trailingTicks=-1, bool dpcm07=false, int correctedRate=44100);
-    // dump to S98.
+    /**
+     * export to S98 (register dump format).
+     * @param tickRate the tick rate. if less than 1.0, it will be automatically determined.
+     * @param sysToExport an array specifying which chips to export. if NULL, all chips supported by the S98 format will be exported.
+     * @param loop whether to loop.
+     * @param trailingTicks set how many ticks to leave at the end before looping:
+     * - 0 to add one tick of trailing
+     * - x to add x+1 ticks of trailing
+     * - -1 to auto-determine trailing
+     * - -2 to add a whole loop of trailing
+     * @return a SafeWriter, or NULL on error.
+     */
     SafeWriter* saveS98(float tickRate=0.0f, bool* sysToExport=NULL, bool loop=true, int trailingTicks=-1);
-    // dump command stream.
+    /**
+     * compile the current song as a command stream.
+     * @param progress a DivCSProgress struct which will be filled periodically.
+     * @param options options for command stream export.
+     * @return a SafeWriter, or NULL on error.
+     */
     SafeWriter* saveCommand(DivCSProgress* progress=NULL, DivCSOptions options=DivCSOptions());
-    // export to text
+    /**
+     * export to a text file.
+     * @param separatePatterns if set, patterns will be dumped one by one (per channel) rather than as a single sheet.
+     * @return a SafeWriter, or NULL on error.
+     */
     SafeWriter* saveText(bool separatePatterns=true);
 #ifdef WITH_JSON
-    // export to json
+    /**
+     * export to a JSON file.
+     * @param options options.
+     * @return a SafeWriter, or NULL on error.
+     */
     SafeWriter* saveJSON(DivJSONExportOptions* options);
 #endif
-    // export to an audio file
+    /**
+     * export to an audio file.
+     * @param path export path.
+     * @param options audio export options.
+     * @return whether export has begun or errored out.
+     */
     bool saveAudio(const char* path, DivAudioExportOptions options);
-    // wait for audio export to finish
+    /**
+     * block until audio export has finished.
+     */
     void waitAudioFile();
-    // stop audio file export
+    /**
+     * abort audio export.
+     * @return whether successful.
+     */
     bool haltAudioFile();
-    // return back to playback cores if necessary
+    /**
+     * call after audio export is done. this will reload emulation cores if necessary.
+     */
     void finishAudioFile();
+
     // notify instrument parameter change
     void notifyInsChange(int ins);
     // notify wavetable change
@@ -1872,7 +2367,7 @@ class DivEngine {
       memset(oscBuf,0,DIV_MAX_OUTPUTS*(sizeof(float*)));
       memset(exportChannelMask,1,DIV_MAX_CHANS*sizeof(bool));
       memset(chipPeak,0,DIV_MAX_CHIPS*DIV_MAX_OUTPUTS*sizeof(float));
-      memset(filePlayerBuf,0,DIV_MAX_OUTPUTS*sizeof(float));
+      memset(filePlayerBuf,0,DIV_MAX_OUTPUTS*sizeof(void*));
 
       changeSong(0);
     }

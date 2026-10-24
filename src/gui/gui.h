@@ -803,6 +803,8 @@ enum FurnaceGUIActions {
   GUI_ACTION_INS_DOWN,
   GUI_ACTION_STEP_UP,
   GUI_ACTION_STEP_DOWN,
+  GUI_ACTION_STEP_UP_COARSE,
+  GUI_ACTION_STEP_DOWN_COARSE,
   GUI_ACTION_TOGGLE_EDIT,
   GUI_ACTION_METRONOME,
   GUI_ACTION_ORDER_LOCK,
@@ -3326,6 +3328,7 @@ class FurnaceGUI {
   void drawWaveEdit();
   void drawSampleList(bool asChild=false);
   void drawSampleEdit();
+  void drawSampleWarning(DivSample* sample, int index, String &warnLoop, String &warnLoopMode, String &warnLoopPos, String &warnLoopStart, String &warnLoopEnd, String &warnLength, String &warnRate);
   void drawMixer();
   void drawOsc();
   void drawChanOsc();
