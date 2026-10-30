@@ -11,7 +11,7 @@ defaults:
     shell: bash
 
 env:
-  BUILD_TYPE: Release
+  BUILD_TYPE: Debug
 
 jobs:
   build:
@@ -89,7 +89,7 @@ jobs:
       if: ${{ matrix.config.name == 'Android' }}
       run: |
         cd ${PWD}/android/
-        JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64/ ./gradlew assembleRelease
+        JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64/ ./gradlew assemble${ env.BUILD_TYPE }
         JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64/ ./gradlew --stop
         cd ../..
 
@@ -98,7 +98,7 @@ jobs:
       run: |
 
         mkdir -p target/furnace
-        mv ${PWD}/android/app/build/outputs/apk/release/app-release.apk target/furnace/${{ steps.package-identify.outputs.id }}.apk
+        mv ${PWD}/android/app/build/outputs/apk/debug/app-debug.apk target/furnace/${{ steps.package-identify.outputs.id }}.apk
         pushd target/furnace
 
         cp ../../LICENSE .
