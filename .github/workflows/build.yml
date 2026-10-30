@@ -89,7 +89,7 @@ jobs:
       if: ${{ matrix.config.name == 'Android' }}
       run: |
         cd ${PWD}/android/
-        JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64/ ./gradlew assemble${ env.BUILD_TYPE }
+        JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64/ ./gradlew assemble${{ env.BUILD_TYPE }}
         JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64/ ./gradlew --stop
         cd ../..
 
